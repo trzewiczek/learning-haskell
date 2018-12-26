@@ -50,6 +50,6 @@ makeAddress number street city = (number, street, city)
 -- What’s the type signature of this function? Note: foldl has a different type signature. 
 
 myFoldl :: (b -> a -> b) -> b -> [a] -> b
-myFoldl _ init [] = init
-myFoldl f init (x:xs) = myFoldl f newInit xs
-  where newInit = f init x
+myFoldl _ acc [] = acc
+myFoldl f acc (x:xs) = myFoldl f newAcc xs
+  where newAcc = f acc x
