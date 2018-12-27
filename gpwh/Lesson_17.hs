@@ -37,13 +37,38 @@ instance Monoid Color where
 
 -- -----------------------------------
 
-type Events = [String]
-type Probs = [Double]
+cartCombine :: (a -> b -> c) -> [a] -> [b] -> [c]
+cartCombine func l1 l2 = zipWith func newL1 cycledL2
+  where nToAdd = length l2
+        repeatedL1s = map (take nToAdd . repeat) l1
+        newL1 = mconcat repeatedL1s
+        cycledL2 = cycle l2
+
+data Events = Events [ String ]
+instance Semigroup Events where
+  (<>) events (Events []) = events
+  (<>) (Events []) events = events
+  (<>) (Events e1) (Events e2) = Events $ cartCombine combiner e1 e2
+    where combiner x y = mconcat [ x, "-", y ]
+
+instance Monoid Events where
+  mempty = Events []
+  mappend = (<>)
+
+data Probs = Probs [ Double ]
+instance Semigroup Probs where
+  (<>) probs (Probs []) = probs
+  (<>) (Probs []) probs = probs
+  (<>) (Probs p1) (Probs p2) = Probs $ cartCombine (*) p1 p2
+
+instance Monoid Probs where
+  mempty = Probs []
+  mappend = (<>)
 
 data PTable = PTable Events Probs
 
 createPTable :: Events -> Probs -> PTable
-createPTable events probs = PTable events normalizedProps
+createPTable events (Probs probs) = PTable events (Probs normalizedProps)
   where normalizedProps = map (\x -> x / totalProbs) probs
         totalProbs = sum probs
 
@@ -53,39 +78,31 @@ showPair maxWidth event prob = mconcat [ event, pad, " | ", show prob, "\n" ]
         missing = maxWidth - length event
 
 instance Show PTable where
-  show (PTable events probs) = mconcat rows
+  show (PTable (Events events) (Probs probs)) = mconcat rows
     where rows = zipWith (showPair maxWidth) events probs
           maxWidth = maximum $ map length events
 
 
-cartCombine :: (a -> b -> c) -> [a] -> [b] -> [c]
-cartCombine func l1 l2 = zipWith func newL1 cycledL2
-  where nToAdd = length l2
-        repeatedL1s = map (take nToAdd . repeat) l1
-        newL1 = mconcat repeatedL1s
-        cycledL2 = cycle l2
-
-combineEvents :: Events -> Events -> Events
-combineEvents e1 e2 = cartCombine combiner e1 e2
-  where combiner x y = mconcat [ x, "-", y ]
-
-combineProbs :: Probs -> Probs -> Probs
-combineProbs p1 p2 = cartCombine (*) p1 p2
-
 instance Semigroup PTable where
-  (<>) ptable (PTable [] []) = ptable
-  (<>) (PTable [] []) ptable = ptable
+  (<>) ptable (PTable (Events []) (Probs [])) = ptable
+  (<>) (PTable (Events []) (Probs [])) ptable = ptable
   (<>) (PTable e1 p1) (PTable e2 p2) = createPTable newEvents newProbs
-    where newEvents = combineEvents e1 e2
-          newProbs = combineProbs p1 p2
+    where newEvents = e1 <> e2
+          newProbs = p1 <> p2
 
 instance Monoid PTable where
-  mempty = PTable [] []
+  mempty = PTable (Events []) (Probs [])
   mappend = (<>)
 
+-- ---------------
+
 coin :: PTable
-coin = createPTable ["heads", "tails"] [0.5, 0.5]
+coin = createPTable
+       (Events [ "heads", "tails" ])
+       (Probs  [     0.5,     0.5 ])
 
 spinner :: PTable
-spinner = createPTable [ "red", "blue", "green" ] [ 0.1, 0.2, 0.7 ]
+spinner = createPTable
+          (Events [ "red", "blue", "green" ])
+          (Probs  [   0.1,    0.2,     0.7 ])
 
