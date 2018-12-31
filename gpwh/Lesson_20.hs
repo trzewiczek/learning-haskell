@@ -121,17 +121,31 @@ maxTS :: Ord a => TS a -> Maybe (Int, Maybe a)
 maxTS = compareTS max
 
 
-diffPair :: Num a => Maybe a -> Maybe a -> Maybe a
-diffPair _ Nothing = Nothing
-diffPair Nothing _ = Nothing
-diffPair (Just v1) (Just v2) = Just (v1 - v2)
+-- TS diffing
+
+type PairFunction a = a -> a -> a
+type DiffPairFunction a = Maybe a -> Maybe a -> Maybe a
+type DiffTSFunction a = TS a -> TS a
+
+makeDiffTS :: DiffPairFunction a -> DiffTSFunction a
+makeDiffTS diffPair = diffTS
+  where diffTS (TS [] []) = TS [] []
+        diffTS (TS times values) = TS times (Nothing : diffedValues)
+          where shiftedValues = tail values
+                diffedValues = zipWith diffPair shiftedValues values
+
+makeDiffPair :: PairFunction a -> DiffPairFunction a
+makeDiffPair pairFunc = diffPair
+  where diffPair _ Nothing = Nothing
+        diffPair Nothing _ = Nothing
+        diffPair (Just v1) (Just v2) = Just (v1 `pairFunc` v2)
 
 
 diffTS :: Num a => TS a -> TS a
-diffTS (TS [] []) = (TS [] [])
-diffTS (TS times values) = TS times (Nothing : diffValues)
-  where shiftValues = tail values
-        diffValues = zipWith diffPair shiftValues values
+diffTS = makeDiffTS $ makeDiffPair (-)
+
+divTS :: Fractional a => TS a -> TS a
+divTS = makeDiffTS $ makeDiffPair (/)
 
 
 -- TS mean / median stats
@@ -156,6 +170,7 @@ makeMovingStatTS stat = movingStatTS
           where ma = (makeMovingStat stat) values n
                 nas = replicate (n `div` 2) Nothing
                 smoothedValues = mconcat [ nas, ma, nas ]
+
 
 -- mean
 
@@ -203,3 +218,24 @@ movingMedian = makeMovingStat medianMaybe
 
 movingMedianTS :: (Ord a, Fractional a) => TS a -> Int -> TS a
 movingMedianTS = makeMovingStatTS medianMaybe
+
+-- SD
+
+standardDeviation :: (Real a, Fractional a) => [a] -> Double
+standardDeviation xs = sqrt variance
+  where xsMean = realToFrac $ mean xs
+        distances = map ((-) xsMean) xs
+        variance = mean $ map (^2) distances
+
+
+standardDeviationMaybe :: (Real a, Fractional a) => [Maybe a] -> Maybe Double
+standardDeviationMaybe [] = Nothing
+standardDeviationMaybe xs = if any (== Nothing) xs
+                            then Nothing
+                            else Just result
+  where result = standardDeviation $ map fromJust xs
+
+
+standardDeviationTS :: (Real a, Fractional a) => TS a -> Maybe Double
+standardDeviationTS (TS [] []) = Nothing
+standardDeviationTS (TS times values) = standardDeviationMaybe values
