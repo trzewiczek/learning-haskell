@@ -1,5 +1,6 @@
 module Main where
 import qualified Data.Map as Map
+import System.Environment
 
 -- Q21.1
 
@@ -26,6 +27,6 @@ main :: IO ()
 main = do
   putStrLn "Input a number:"
   putStr "> "
-  userNumber <- getLine
-  let result = fib $ read userNumber
+  userNumber <- getArgs
+  let result = fib $ read (head userNumber)
   putStrLn $ show result
